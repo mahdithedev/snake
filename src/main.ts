@@ -1,8 +1,9 @@
 import './style.css'
 
 // i know i can to this better but this is just fine for now
-if(!window.localStorage.getItem("GRID_DIMENSION")) {
-    window.localStorage.setItem("GRID_DIMENSION" , "500");
+
+function get(key: string) {
+    return (window.localStorage.getItem(key) as string);
 }
 
 if(!window.localStorage.getItem("GRID_SIZE")) {
@@ -13,29 +14,24 @@ if(!window.localStorage.getItem("WALLS")) {
     window.localStorage.setItem("WALLS" , "true");
 }
 
-if(!window.localStorage.getItem("FPS")) {
-    window.localStorage.setItem("FPS" , "12");
+if(!window.localStorage.getItem("GAME_SPEED")) {
+    window.localStorage.setItem("GAME_SPEED" , "12");
 }
 
 if(!window.localStorage.getItem("SNAKE_COLOR")) {
     window.localStorage.setItem("SNAKE_COLOR" , "crimson");
 }
 
-function get(key: string): string {
-    return (window.localStorage.getItem(key) as string);
-}
-
 const ROW_COUNT = parseInt(get("GRID_SIZE"));
 const CELL_COUNT = parseInt(get("GRID_SIZE"));
 
-const ROW_HEIGHT = `${parseInt(get("GRID_DIMENSION"))/ROW_COUNT}px`;
-const CELL_WIDTH = `${parseInt(get("GRID_DIMENSION"))/CELL_COUNT}px`;
+const CELL_SIZE = 500/CELL_COUNT;
 
 const WALLS = get("WALLS") == "true";
 
-const FPS = parseInt(get("FPS"));
+const iterations_per_second = parseInt(get("GAME_SPEED"));
 
-const snakeColor = get("SNAKE_COLOR");
+const snakeColor = (get("SNAKE_COLOR") as any);
 
 type Position = [number , number];
 
@@ -43,25 +39,21 @@ function copyPosition(pos : Position): Position {
     return [pos[0] , pos[1]]
 }
 
-function set_at(grid: number[][] , pos: Position , value: number) {
+function set_at(grid: CellType[][] , pos: Position , value: CellType) {
     grid[pos[0]][pos[1]] = value;
 }
 
-function isGameover(grid: number[][] , head: Position) : boolean {
-
-    let cell = grid[head[0]][head[1]];
-
-    if(cell == 1 || cell == 3) {
-        return true;
-    }
-
-    return false;
+enum CellType {
+    SNAKE = snakeColor,
+    FOOD = 'yellow',
+    NOTHING = 'black',
+    WALLS = '#1b1b24'
 }
 
-let grid_element = (document.querySelector(".grid") as HTMLDivElement);
-grid_element.style.width = get("GRID_DIMENSION") + "px";
-grid_element.style.height = get("GRID_DIMENSION") + "px";
-let grid: number[][] = [];
+const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+const context = canvas.getContext('2d') as CanvasRenderingContext2D;
+
+let grid: CellType[][] = [];
 
 function random_numebr(min: number , max: number): number {
     return Math.floor((Math.random() * max) + min);
@@ -71,11 +63,11 @@ function generate_random_coordinate() : Position {
     return [random_numebr(0 , ROW_COUNT) , random_numebr(0 , CELL_COUNT)];
 }
 
-function generate_valid_random_coordinate(grid: number[][]): Position {
+function generate_valid_random_coordinate(grid: CellType[][]): Position {
 
-    let pos = generate_random_coordinate();
+    let pos = generate_random_coordinate(); 
 
-    while(grid[pos[0]][pos[1]] !== 0) {
+    while(grid[pos[0]][pos[1]] == CellType.WALLS) {
         pos = generate_random_coordinate();
     }
 
@@ -83,161 +75,50 @@ function generate_valid_random_coordinate(grid: number[][]): Position {
 
 };
 
-for(let i = 0 ; i < ROW_COUNT ; i++) {
-    
-    let row_element = document.createElement("div");
-    row_element.className = `row-${i}`;
-    row_element.style.height = ROW_HEIGHT;
-    row_element.style.width = "100%";
-
-    let row = []
-
-    for(let j = 0 ; j < CELL_COUNT ; j++) {
-
-        let cell_element = document.createElement("div");
-        cell_element.className = `cell-${i}-${j}`;
-        cell_element.style.width = CELL_WIDTH;
-        cell_element.style.height = "100%";
-        cell_element.style.display = "inline-block"
-
-        row_element.appendChild(cell_element);
-
-        row.push(0);
-
+for (let i = 0; i < ROW_COUNT; i++) {
+    let row = [];
+    for (let j = 0; j < CELL_COUNT; j++) {
+      row.push(CellType.NOTHING);
     }
-
     grid.push(row);
-    
-    grid_element.appendChild(row_element);
-
 }
 
 if(WALLS) {
-    
-    for(let i = 0 ; i < ROW_COUNT ; i++) {
-        grid[i][0] = 3;
-        grid[i][CELL_COUNT-1] = 3;
-    }
+
+    for(let j = 0 ; j < CELL_COUNT ; j++) {
+        grid[0][j] = CellType.WALLS;
+        grid[ROW_COUNT-1][j] = CellType.WALLS;
+    };
 
     for(let i = 0 ; i < ROW_COUNT ; i++) {
-        grid[0][i] = 3;
-        grid[ROW_COUNT-1][i] = 3;
+        grid[i][0] = CellType.WALLS;
+        grid[i][CELL_COUNT-1] = CellType.WALLS;
     }
 
 }
 
-function render_loop(now: number) {
+function render(timestamp: number) {
 
-    for(let i = 0 ; i < grid.length ; i++) {
-        for(let j = 0 ; j < grid[i].length ; j++) {
-
-            // i intentianliy use a number to color translation instead of using colors directly
-            let cell = (document.querySelector(`.cell-${i}-${j}`) as HTMLDivElement);
-
-            let newBackgroundColor = "black"
-
-            if(grid[i][j] == 1) {
-                newBackgroundColor = snakeColor;
-            }
-
-            if(grid[i][j] == 2) {
-                newBackgroundColor ="yellow";
-            }
-
-            if(grid[i][j] == 3) {
-                newBackgroundColor = "#1b1b24";
-            }
-
-            cell.style.backgroundColor = newBackgroundColor;
-            (document.querySelector(".score") as HTMLDivElement).innerText = `score is ${score}`;
-
-        }
+    for (let i = 0; i < ROW_COUNT; i++) {
+      for (let j = 0; j < CELL_COUNT; j++) {
+        const cell = grid[i][j];
+        const x = j * CELL_SIZE;
+        const y = i * CELL_SIZE;
+        context.fillStyle = (cell as string);
+        context.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+      }
     }
 
-    requestAnimationFrame(render_loop);
+    requestAnimationFrame(render);
 
 }
 
-let head : Position = generate_valid_random_coordinate(grid);
-let tail : Position[] = [];
-let prevhead : Position = copyPosition(head);
-let cleaningEntity : Position = copyPosition(head);
 let loopIds: number[] = [];
 let score = 0;
 
-function game_loop() {
-
-    set_at(grid , cleaningEntity , 0);
-
-    if(isGameover(grid , head)) {
-        clearInterval(loopIds[1]);
-        window.cancelAnimationFrame(loopIds[0]);
-        window.alert("Game is over");
-    };
-
-    set_at(grid , head , 1);
-
-    tail.forEach(pos => {
-        set_at(grid , pos , 1);
-    });
-
-    if(direction == "") {
-        return;
-    }
-
-    if(direction == "u") {
-        prevhead = copyPosition(head);
-        head[0] = (head[0] - 1 + ROW_COUNT)%(CELL_COUNT);
-    }
-
-    if(direction == "d") {
-        prevhead = copyPosition(head);
-        head[0] = (head[0] + 1)%(ROW_COUNT);
-    }
-
-    if(direction == "r") {
-        prevhead = copyPosition(head);
-        head[1] = (head[1] + 1)%(CELL_COUNT);
-    }
-
-    if(direction == "l") {
-        prevhead = copyPosition(head);
-        head[1] = (head[1] - 1 + CELL_COUNT)%(CELL_COUNT);
-    }
-
-    if(food[0] == -1 && food[1] == -1) {
-        food = generate_valid_random_coordinate(grid);
-        set_at(grid , food , 2);
-    }
-
-    let foodEaten = false;
-
-    if(head[0] == food[0] && head[1] == food[1]) {
-        food = [-1 , -1];
-        foodEaten = true;
-        score++;
-    }
-
-    if(tail.length > 0) {
-        cleaningEntity = (tail.pop() as Position);
-        tail.unshift(copyPosition(prevhead));
-    } else {
-        cleaningEntity = copyPosition(prevhead);
-    }
-    
-    if(foodEaten) {
-        tail.push(copyPosition(cleaningEntity));
-    }
-
-};
-
-loopIds.push(requestAnimationFrame(render_loop));
-loopIds.push(setInterval(game_loop , 1000/FPS));
-
 let direction = "";
-let food : Position = [-1 , -1]; 
 
-window.addEventListener("keypress" , (key) => {
+window.onkeydown = (key) => {
 
     if(key.code == "KeyW" && direction != "d") {
         direction = "u";
@@ -255,4 +136,55 @@ window.addEventListener("keypress" , (key) => {
         direction = "l";
     }
 
-})
+};
+
+let head: Position = generate_valid_random_coordinate(grid);
+let food: Position = generate_valid_random_coordinate(grid);
+let cleaner = copyPosition(head);
+let tail: Position[] = [];
+
+function game_loop() {
+
+    if(tail.length > 0) {
+        cleaner = (tail.pop() as Position);
+        tail.unshift(copyPosition(head));
+    } else {
+        cleaner = copyPosition(head);
+    }
+
+    if (direction == 'r') {
+        head[1] = (head[1] + 1) % CELL_COUNT;
+    } else if (direction == 'd') {
+        head[0] = (head[0] + 1) % ROW_COUNT;
+    } else if (direction == 'l') {
+        head[1] = (head[1] - 1 + CELL_COUNT) % CELL_COUNT;
+    } else if (direction == 'u') {
+        head[0] = (head[0] - 1 + ROW_COUNT) % ROW_COUNT;
+    }
+
+    if(direction !== '') {
+        if(grid[head[0]][head[1]] == CellType.WALLS || grid[head[0]][head[1]] == CellType.SNAKE) {
+            clearInterval(loopIds[1]);
+            window.alert(`Game over your score is ${score}`)
+            return
+        }
+    }
+
+    for(let i = 0; i < tail.length; i++) {
+        set_at(grid, tail[i], CellType.SNAKE);
+    }
+
+    if(head[0] == food[0] && head[1] == food[1]) {
+        score += 1;
+        food = generate_valid_random_coordinate(grid);
+        tail.push(cleaner);
+    };
+
+    set_at(grid, cleaner, CellType.NOTHING);
+    set_at(grid, head, CellType.SNAKE);
+    set_at(grid, food, CellType.FOOD);
+
+}
+
+loopIds.push(requestAnimationFrame(render));
+loopIds.push(setInterval(game_loop, 1000/iterations_per_second));
